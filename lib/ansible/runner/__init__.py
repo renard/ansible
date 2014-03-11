@@ -142,6 +142,7 @@ class Runner(object):
         vault_pass=None,
         run_hosts=None,                     # an optional list of pre-calculated hosts to run on
         no_log=False,                       # option to enable/disable logging for a given task
+        chroot_dir=None,                    # optional chroot dir path to execute tasks to.
         ):
 
         # used to lock multiprocess inputs and outputs at various levels
@@ -194,6 +195,7 @@ class Runner(object):
         self.su_pass          = su_pass
         self.vault_pass       = vault_pass
         self.no_log           = no_log
+        self.chroot_dir       = chroot_dir
 
         if self.transport == 'smart':
             # if the transport is 'smart' see if SSH can support ControlPersist if not use paramiko
@@ -472,7 +474,11 @@ class Runner(object):
         if tmp.find("tmp") != -1 and not C.DEFAULT_KEEP_REMOTE_FILES and not persist_files and delete_remote_tmp:
             if not self.sudo or self.su or self.sudo_user == 'root' or self.su_user == 'root':
                 # not sudoing or sudoing to root, so can cleanup files in the same step
-                cmd = cmd + "; rm -rf %s >/dev/null 2>&1" % tmp
+                if not self.chroot_dir is None:
+                    remove_tmp = os.path.sep.join((self.chroot_dir, tmp))
+                else:
+                    remove_tmp = tmp
+                cmd = cmd + "; rm -rf %s >/dev/null 2>&1" % remove_tmp
 
         sudoable = True
         if module_name == "accelerate":
@@ -861,6 +867,10 @@ class Runner(object):
                 if failed_when is not None:
                     data['failed_when_result'] = data['failed'] = utils.check_conditional(failed_when, self.basedir, inject, fail_on_undefined=self.error_on_undefined_vars)
 
+            _host = host
+            if not self.chroot_dir is None:
+                _host = '%s:%s' % (host, self.chroot_dir)
+
             if is_chained:
                 # no callbacks
                 return result
@@ -868,11 +878,11 @@ class Runner(object):
                 self.callbacks.on_skipped(host)
             elif not result.is_successful():
                 ignore_errors = self.module_vars.get('ignore_errors', False)
-                self.callbacks.on_failed(host, data, ignore_errors)
+                self.callbacks.on_failed(_host, data, ignore_errors)
             else:
                 if self.diff:
                     self.callbacks.on_file_diff(conn.host, result.diff)
-                self.callbacks.on_ok(host, data)
+                self.callbacks.on_ok(_host, data)
         return result
 
     def _early_needs_tmp_path(self, module_name, handler):
@@ -952,6 +962,8 @@ class Runner(object):
     def _remote_md5(self, conn, tmp, path):
         ''' takes a remote md5sum without requiring python, and returns 1 if no file '''
 
+        if not self.chroot_dir is None:
+            path = os.path.sep.join((self.chroot_dir, path))
         path = pipes.quote(path)
         # The following test needs to be SH-compliant.  BASH-isms will
         # not work if /bin/sh points to a non-BASH shell.
@@ -997,9 +1009,12 @@ class Runner(object):
         if (self.sudo and self.sudo_user != 'root') or (self.su and self.su_user != 'root') and basetmp.startswith('$HOME'):
             basetmp = os.path.join('/tmp', basefile)
 
-        cmd = 'mkdir -p %s' % basetmp
+        prefix=''
+        if not self.chroot_dir is None:
+            prefix = self.chroot_dir + os.path.sep
+        cmd = 'mkdir -p %s%s' % (prefix, basetmp)
         if self.remote_user != 'root' or ((self.sudo and self.sudo_user != 'root') or (self.su and self.su_user != 'root')):
-            cmd += ' && chmod a+rx %s' % basetmp
+            cmd += ' && chmod a+rx %s%s' % (prefix, basetmp)
         cmd += ' && echo %s' % basetmp
 
         result = self._low_level_exec_command(conn, cmd, None, sudoable=False)

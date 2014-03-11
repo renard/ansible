@@ -180,6 +180,9 @@ class Connection(object):
             ssh_cmd += ['-6']
         ssh_cmd += [self.host]
 
+        if not self.runner.chroot_dir is None and (sudoable or su):
+            cmd =  'chroot %s %s' % ( self.runner.chroot_dir, cmd )
+
         if su and su_user:
             sudocmd, prompt, success_key = utils.make_su_cmd(su_user, executable, cmd)
             ssh_cmd.append(sudocmd)
@@ -339,6 +342,10 @@ class Connection(object):
 
     def put_file(self, in_path, out_path):
         ''' transfer a file from local to remote '''
+
+        if not self.runner.chroot_dir is None:
+            out_path = os.path.sep.join((self.runner.chroot_dir, out_path))
+
         vvv("PUT %s TO %s" % (in_path, out_path), host=self.host)
         if not os.path.exists(in_path):
             raise errors.AnsibleFileNotFound("file or module does not exist: %s" % in_path)
@@ -369,17 +376,19 @@ class Connection(object):
         vvv("FETCH %s TO %s" % (in_path, out_path), host=self.host)
         cmd = self._password_cmd()
 
+        if not self.runner.chroot_dir is None:
+            _in_path = os.path.sep.join((self.runner.chroot_dir, in_path))
         host = self.host
         if self.ipv6:
             host = '[%s]' % host
 
         if C.DEFAULT_SCP_IF_SSH:
             cmd += ["scp"] + self.common_args
-            cmd += [host + ":" + in_path, out_path]
+            cmd += [host + ":" + _in_path, out_path]
             indata = None
         else:
             cmd += ["sftp"] + self.common_args + [host]
-            indata = "get %s %s\n" % (in_path, out_path)
+            indata = "get %s %s\n" % (_in_path, out_path)
 
         p = subprocess.Popen(cmd, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)

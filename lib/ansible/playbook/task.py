@@ -31,7 +31,7 @@ class Task(object):
         'local_action', 'transport', 'sudo', 'remote_user', 'sudo_user', 'sudo_pass',
         'items_lookup_plugin', 'items_lookup_terms', 'environment', 'args',
         'any_errors_fatal', 'changed_when', 'failed_when', 'always_run', 'delay', 'retries', 'until',
-        'su', 'su_user', 'su_pass', 'no_log',
+        'su', 'su_user', 'su_pass', 'no_log', 'chroot_dir',
     ]
 
     # to prevent typos and such
@@ -41,7 +41,7 @@ class Task(object):
          'delegate_to', 'local_action', 'transport', 'remote_user', 'sudo', 'sudo_user',
          'sudo_pass', 'when', 'connection', 'environment', 'args',
          'any_errors_fatal', 'changed_when', 'failed_when', 'always_run', 'delay', 'retries', 'until',
-         'su', 'su_user', 'su_pass', 'no_log',
+         'su', 'su_user', 'su_pass', 'no_log', 'chroot_dir',
     ]
 
     def __init__(self, play, ds, module_vars=None, default_vars=None, additional_conditions=None, role_name=None):
@@ -178,6 +178,17 @@ class Task(object):
             self.action      = ds.get('action', '')
             self.delegate_to = ds.get('delegate_to', None)
             self.transport   = ds.get('connection', ds.get('transport', play.transport))
+
+
+        if play.accelerate:
+            self.chroot_dir = None
+        else:
+            for x in [ ds.get('chroot_dir'),
+                       ds.get('chroot_dir', play.chroot_dir),
+                       ds.get('chroot_dir', play.playbook.chroot_dir)]:
+                self.chroot_dir = x
+                if x is not None:
+                    break
 
         if isinstance(self.action, dict):
             if 'module' not in self.action:

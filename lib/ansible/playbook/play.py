@@ -21,6 +21,7 @@ from ansible.utils.template import template
 from ansible import utils
 from ansible import errors
 from ansible.playbook.task import Task
+from ansible.callbacks import vv
 import ansible.constants as C
 import pipes
 import shlex
@@ -34,7 +35,7 @@ class Play(object):
        'handlers', 'remote_user', 'remote_port', 'included_roles', 'accelerate',
        'accelerate_port', 'accelerate_ipv6', 'sudo', 'sudo_user', 'transport', 'playbook',
        'tags', 'gather_facts', 'serial', '_ds', '_handlers', '_tasks',
-       'basedir', 'any_errors_fatal', 'roles', 'max_fail_pct', '_play_hosts', 'su', 'su_user', 'vault_password'
+       'basedir', 'any_errors_fatal', 'roles', 'max_fail_pct', '_play_hosts', 'su', 'su_user', 'vault_password', 'chroot_dir'
     ]
 
     # to catch typos and so forth -- these are userland names
@@ -44,7 +45,7 @@ class Play(object):
        'tasks', 'handlers', 'remote_user', 'user', 'port', 'include', 'accelerate', 'accelerate_port', 'accelerate_ipv6',
        'sudo', 'sudo_user', 'connection', 'tags', 'gather_facts', 'serial',
        'any_errors_fatal', 'roles', 'pre_tasks', 'post_tasks', 'max_fail_percentage',
-       'su', 'su_user', 'vault_password'
+       'su', 'su_user', 'vault_password', 'chroot_dir'
     ]
 
     # *************************************************
@@ -113,6 +114,7 @@ class Play(object):
         self._tasks           = ds.get('tasks', [])
         self._handlers        = ds.get('handlers', [])
         self.remote_user      = ds.get('remote_user', ds.get('user', self.playbook.remote_user))
+        self.chroot_dir       = ds.get('chroot_dir', self.playbook.chroot_dir)
         self.remote_port      = ds.get('port', self.playbook.remote_port)
         self.sudo             = ds.get('sudo', self.playbook.sudo)
         self.sudo_user        = ds.get('sudo_user', self.playbook.sudo_user)
@@ -128,6 +130,9 @@ class Play(object):
         self.su_user          = ds.get('su_user', self.playbook.su_user)
         #self.vault_password   = vault_password
 
+        if self.chroot_dir is not None:
+            vv("'accelerate' mode is not supported by 'chroot_dir'. Falling back to 'ssh'")
+            self.accelerate = False
         # Fail out if user specifies a sudo param with a su param in a given play
         if (ds.get('sudo') or ds.get('sudo_user')) and (ds.get('su') or ds.get('su_user')):
             raise errors.AnsibleError('sudo params ("sudo", "sudo_user") and su params '

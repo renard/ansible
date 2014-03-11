@@ -73,6 +73,7 @@ class PlayBook(object):
         su_user          = False,
         su_pass          = False,
         vault_password   = False,
+        chroot_dir       = None,
     ):
 
         """
@@ -140,6 +141,7 @@ class PlayBook(object):
         self.su_user          = su_user
         self.su_pass          = su_pass
         self.vault_password   = vault_password
+        self.chroot_dir       = chroot_dir
 
         self.callbacks.playbook = self
         self.runner_callbacks.playbook = self
@@ -357,6 +359,7 @@ class PlayBook(object):
             vault_pass = self.vault_password,
             run_hosts=hosts,
             no_log=task.no_log,
+            chroot_dir=task.chroot_dir,
         )
 
         runner.module_vars.update({'play_hosts': hosts})
@@ -516,6 +519,7 @@ class PlayBook(object):
             diff=self.diff,
             accelerate=play.accelerate,
             accelerate_port=play.accelerate_port,
+            chroot_dir=play.chroot_dir,
         ).run()
         self.stats.compute(setup_results, setup=True)
 
