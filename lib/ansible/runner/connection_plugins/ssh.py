@@ -180,7 +180,7 @@ class Connection(object):
             ssh_cmd += ['-6']
         ssh_cmd += [self.host]
 
-        if not self.runner.chroot_dir is None and (sudoable or su):
+        if not self.runner.chroot_dir is None and (sudoable or self.runner.remote_user == 'root'):
             cmd =  'chroot %s %s' % ( self.runner.chroot_dir, cmd )
 
         if su and su_user:

@@ -1009,15 +1009,30 @@ class Runner(object):
         if (self.sudo and self.sudo_user != 'root') or (self.su and self.su_user != 'root') and basetmp.startswith('$HOME'):
             basetmp = os.path.join('/tmp', basefile)
 
+        # Find value of $HOME in root system. Since chroot is run by root,
+        # we cannot transfert file to remote location because
+        # /CHROOT/root/.ansible is not accessible for user (sftp does not
+        # handle sudo).
+        _old_chroot_dir = self.chroot_dir
         prefix=''
-        if not self.chroot_dir is None:
-            prefix = self.chroot_dir + os.path.sep
+        if not (self.chroot_dir is None) and basetmp.startswith('$HOME'):
+            self.chroot_dir = None
+            r = self._low_level_exec_command(conn, 'echo $HOME',
+                                             None, sudoable=False)
+            if r['rc'] == 0:
+                home = r['stdout'].splitlines()[0]
+                basetmp = basetmp.replace('$HOME', home)
+                prefix = _old_chroot_dir + '/' #os.path.join(self.chroot_dir, home)
         cmd = 'mkdir -p %s%s' % (prefix, basetmp)
+
         if self.remote_user != 'root' or ((self.sudo and self.sudo_user != 'root') or (self.su and self.su_user != 'root')):
             cmd += ' && chmod a+rx %s%s' % (prefix, basetmp)
         cmd += ' && echo %s' % basetmp
 
         result = self._low_level_exec_command(conn, cmd, None, sudoable=False)
+
+        # restore fake value
+        self.chroot_dir = _old_chroot_dir
 
         # error handling on this seems a little aggressive?
         if result['rc'] != 0:
